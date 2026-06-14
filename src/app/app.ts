@@ -30,6 +30,11 @@ export class AppComponent {
   game: any;
   score: any;
   soundEnabled = true;
+  timerDuration = 5;
+  timerRemaining = 5;
+  timerPercent = 100;
+  timerState: 'running' | 'stopped' = 'stopped';
+  private timerInterval: number | null = null;
   private audioContext: AudioContext | null = null;
 
   // ✅ Backend is running on HTTP port 5258
@@ -162,6 +167,62 @@ export class AppComponent {
     }
   }
 
+  get timerRingStyle() {
+    const color = this.game?.currentPlayer === 'X' ? '#2196f3' : '#f44336';
+    return {
+      background: `conic-gradient(${color} ${this.timerPercent}%, rgba(255,255,255,0.1) 0)`
+    };
+  }
+
+  private startTurnTimer() {
+    this.stopTurnTimer();
+    this.timerRemaining = this.timerDuration;
+    this.timerPercent = 100;
+    this.timerState = 'running';
+    this.cdr.detectChanges();
+
+    this.timerInterval = window.setInterval(() => {
+      if (!this.game || this.game.status !== 'InProgress') {
+        this.stopTurnTimer();
+        return;
+      }
+
+      this.timerRemaining = Math.max(0, this.timerRemaining - 0.1);
+      this.timerPercent = Math.round((this.timerRemaining / this.timerDuration) * 100);
+      this.cdr.detectChanges();
+
+      if (this.timerRemaining <= 0) {
+        this.stopTurnTimer();
+        this.onTimerExpired();
+      }
+    }, 100) as unknown as number;
+  }
+
+  private stopTurnTimer() {
+    if (this.timerInterval !== null) {
+      window.clearInterval(this.timerInterval);
+      this.timerInterval = null;
+    }
+    this.timerState = 'stopped';
+  }
+
+  private onTimerExpired() {
+    if (!this.game || this.game.status !== 'InProgress') return;
+    this.skipTurn();
+  }
+
+  private skipTurn() {
+    if (!this.game) return;
+    this.http.post<any>(`${this.base}/games/${this.game.id}/skip`, {})
+      .subscribe(g => {
+        this.game = this.normalizeGame(g);
+        this.cdr.detectChanges();
+        if (this.game.status === 'InProgress') {
+          this.startTurnTimer();
+        }
+      });
+  }
+
   trackRow(index: number) {
     return index;
   }
@@ -172,13 +233,14 @@ export class AppComponent {
 
   // ✅ FIXED METHOD (IMPORTANT)
   newGame(mode: string) {
-    this.http.post(`${this.base}/games`, { mode }, {
+    this.http.post<any>(`${this.base}/games`, { mode }, {
       headers: { 'Content-Type': 'application/json' }
     })
       .subscribe(g => {
         this.game = this.normalizeGame(g);
         this.cdr.detectChanges();
         this.playSound('start');
+        this.startTurnTimer();
       });
   }
 
@@ -187,7 +249,7 @@ export class AppComponent {
 
     const previousCurrentPlayer = this.game.currentPlayer;
 
-    this.http.post(`${this.base}/games/${this.game.id}/moves`,
+    this.http.post<any>(`${this.base}/games/${this.game.id}/moves`,
       { row: r, column: c })
       .subscribe(g => {
         this.game = this.normalizeGame(g);
@@ -195,15 +257,21 @@ export class AppComponent {
         this.loadScore();
         this.playMoveSound(g, previousCurrentPlayer);
         this.playOutcomeSound(g);
+        if (g.status === 'InProgress') {
+          this.startTurnTimer();
+        }
       });
   }
 
   undo() {
-    this.http.post(`${this.base}/games/${this.game.id}/undo`, {})
+    this.http.post<any>(`${this.base}/games/${this.game.id}/undo`, {})
       .subscribe(g => {
         this.game = this.normalizeGame(g);
         this.cdr.detectChanges();
         this.playSound('undo');
+        if (g.status === 'InProgress') {
+          this.startTurnTimer();
+        }
       });
   }
 
@@ -236,6 +304,7 @@ export class AppComponent {
       focusCancel: true
     }).then((result: SweetAlertResult) => {
       if (result.isConfirmed) {
+        this.stopTurnTimer();
         this.game = null;
         this.cdr.detectChanges();
         this.playSound('back');

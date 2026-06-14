@@ -38,6 +38,15 @@
         Turn: {{game.currentPlayer}}
       </div>
 
+      <div class="timer-card" *ngIf="game?.status==='InProgress'">
+        <div class="timer-ring" [ngStyle]="timerRingStyle" [class.urgent]="timerPercent <= 20">
+          <div class="timer-center">
+            <div class="timer-label">{{game.currentPlayer}}'s turn</div>
+            <div class="timer-value">{{ timerRemaining | number:'1.0-0' }}s</div>
+          </div>
+        </div>
+      </div>
+
       <div class="board">
         <div *ngFor="let row of game.board; let i=index; trackBy: trackRow">
           <button *ngFor="let cell of row; let j=index; trackBy: trackCell"
