@@ -2,8 +2,15 @@
 
   <!-- ✅ HEADER -->
   <header>
-    <h1>🎮 Tic Tac Toe</h1>
-    <p class="subtitle">Play smart. Win faster.</p>
+    <div class="header-top">
+      <div>
+        <h1>🎮 Tic Tac Toe</h1>
+        <p class="subtitle">Play smart. Win faster.</p>
+      </div>
+      <button mat-flat-button color="primary" class="sound-toggle" (click)="toggleSound()">
+        {{ soundEnabled ? '🔊 Sound On' : '🔇 Sound Off' }}
+      </button>
+    </div>
   </header>
 
   <!-- ✅ GAME MODE SELECTION -->

@@ -29,6 +29,8 @@ export class AppComponent {
 
   game: any;
   score: any;
+  soundEnabled = true;
+  private audioContext: AudioContext | null = null;
 
   // ✅ Backend is running on HTTP port 5258
   base = 'http://localhost:5258/api';
@@ -37,6 +39,127 @@ export class AppComponent {
 
   private normalizeGame(game: any) {
     return JSON.parse(JSON.stringify(game));
+  }
+
+  toggleSound() {
+    this.soundEnabled = !this.soundEnabled;
+
+    if (this.soundEnabled) {
+      this.playSound('start');
+    }
+  }
+
+  private ensureAudioContext() {
+    if (!this.audioContext) {
+      const AudioCtor = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioCtor) return;
+      this.audioContext = new AudioCtor();
+    }
+
+    if (this.audioContext.state === 'suspended') {
+      this.audioContext.resume().catch(() => {});
+    }
+  }
+
+  private playTone(frequency: number, duration = 0.08, type: OscillatorType = 'sine', delay = 0, volume = 0.12) {
+    if (!this.soundEnabled) return;
+    this.ensureAudioContext();
+    if (!this.audioContext) return;
+
+    const start = this.audioContext.currentTime + delay;
+    const gain = this.audioContext.createGain();
+    const oscillator = this.audioContext.createOscillator();
+
+    oscillator.type = type;
+    oscillator.frequency.setValueAtTime(frequency, start);
+    gain.gain.setValueAtTime(volume, start);
+    gain.gain.exponentialRampToValueAtTime(0.001, start + duration);
+
+    oscillator.connect(gain);
+    gain.connect(this.audioContext.destination);
+
+    oscillator.start(start);
+    oscillator.stop(start + duration);
+  }
+
+  private playSequence(notes: Array<{freq: number; dur: number; type?: OscillatorType; delay?: number; vol?: number}>) {
+    for (const note of notes) {
+      this.playTone(note.freq, note.dur, note.type ?? 'triangle', note.delay ?? 0, note.vol ?? 0.12);
+    }
+  }
+
+  private playSound(effect: 'move' | 'xMove' | 'oMove' | 'start' | 'undo' | 'reset' | 'back' | 'win' | 'draw') {
+    if (!this.soundEnabled) return;
+
+    switch (effect) {
+      case 'move':
+        this.playSequence([
+          { freq: 440, dur: 0.06, type: 'triangle' },
+          { freq: 660, dur: 0.08, type: 'triangle', delay: 0.06 }
+        ]);
+        break;
+      case 'xMove':
+        this.playSequence([
+          { freq: 610, dur: 0.06, type: 'triangle' },
+          { freq: 740, dur: 0.08, type: 'triangle', delay: 0.06 }
+        ]);
+        break;
+      case 'oMove':
+        this.playSequence([
+          { freq: 280, dur: 0.08, type: 'square' },
+          { freq: 220, dur: 0.1, type: 'square', delay: 0.08 }
+        ]);
+        break;
+      case 'start':
+        this.playSequence([
+          { freq: 300, dur: 0.08, type: 'triangle' },
+          { freq: 360, dur: 0.08, type: 'triangle', delay: 0.08 },
+          { freq: 420, dur: 0.12, type: 'triangle', delay: 0.16 }
+        ]);
+        break;
+      case 'undo':
+        this.playSequence([
+          { freq: 500, dur: 0.1, type: 'sine' },
+          { freq: 360, dur: 0.12, type: 'sine', delay: 0.1 }
+        ]);
+        break;
+      case 'reset':
+      case 'back':
+        this.playTone(220, 0.14, 'sine');
+        break;
+      case 'win':
+        this.playSequence([
+          { freq: 660, dur: 0.1, type: 'triangle' },
+          { freq: 880, dur: 0.1, type: 'triangle', delay: 0.08 },
+          { freq: 1040, dur: 0.18, type: 'triangle', delay: 0.16 }
+        ]);
+        break;
+      case 'draw':
+        this.playSequence([
+          { freq: 520, dur: 0.14, type: 'sine' },
+          { freq: 460, dur: 0.14, type: 'sine', delay: 0.1 }
+        ]);
+        break;
+    }
+  }
+
+  private playOutcomeSound(game: any) {
+    if (!game) return;
+    if (game.status === 'Won') {
+      this.playSound('win');
+    } else if (game.status === 'Draw') {
+      this.playSound('draw');
+    }
+  }
+
+  private playMoveSound(game: any, previousCurrentPlayer: string) {
+    if (!game) return;
+    const currentMovePlayer = previousCurrentPlayer;
+    if (currentMovePlayer === 'X') {
+      this.playSound('xMove');
+    } else {
+      this.playSound('oMove');
+    }
   }
 
   trackRow(index: number) {
@@ -55,11 +178,14 @@ export class AppComponent {
       .subscribe(g => {
         this.game = this.normalizeGame(g);
         this.cdr.detectChanges();
+        this.playSound('start');
       });
   }
 
   move(r: number, c: number) {
     if (this.game.status !== 'InProgress') return;
+
+    const previousCurrentPlayer = this.game.currentPlayer;
 
     this.http.post(`${this.base}/games/${this.game.id}/moves`,
       { row: r, column: c })
@@ -67,6 +193,8 @@ export class AppComponent {
         this.game = this.normalizeGame(g);
         this.cdr.detectChanges();
         this.loadScore();
+        this.playMoveSound(g, previousCurrentPlayer);
+        this.playOutcomeSound(g);
       });
   }
 
@@ -75,6 +203,7 @@ export class AppComponent {
       .subscribe(g => {
         this.game = this.normalizeGame(g);
         this.cdr.detectChanges();
+        this.playSound('undo');
       });
   }
 
@@ -83,6 +212,7 @@ export class AppComponent {
       .subscribe(g => {
         this.game = this.normalizeGame(g);
         this.cdr.detectChanges();
+        this.playSound('reset');
       });
   }
 
@@ -108,6 +238,7 @@ export class AppComponent {
       if (result.isConfirmed) {
         this.game = null;
         this.cdr.detectChanges();
+        this.playSound('back');
       }
     });
   }
