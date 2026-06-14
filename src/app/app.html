@@ -1,0 +1,91 @@
+<div class="app">
+
+  <!-- ✅ HEADER -->
+  <header>
+    <h1>🎮 Tic Tac Toe</h1>
+    <p class="subtitle">Play smart. Win faster.</p>
+  </header>
+
+  <!-- ✅ GAME MODE SELECTION -->
+  <mat-card class="mode-card" *ngIf="!game">
+    <h2>Select Game Mode</h2>
+
+    <div class="mode-buttons">
+      <button mat-raised-button color="primary" (click)="newGame('TwoPlayer')">
+        👥 Two Player
+      </button>
+
+      <button mat-raised-button color="accent" (click)="newGame('Computer')">
+        🤖 Play vs Computer
+      </button>
+    </div>
+  </mat-card>
+
+  <!-- ✅ GAME + SIDE PANEL -->
+  <div class="layout" *ngIf="game">
+
+    <!-- ✅ GAME BOARD -->
+    <mat-card class="game-card">
+
+      <div class="turn" [class.x]="game.currentPlayer==='X'" [class.o]="game.currentPlayer==='O'">
+        Turn: {{game.currentPlayer}}
+      </div>
+
+      <div class="board">
+        <div *ngFor="let row of game.board; let i=index; trackBy: trackRow">
+          <button *ngFor="let cell of row; let j=index; trackBy: trackCell"
+            (click)="move(i,j)"
+            [disabled]="cell || game.status !== 'InProgress'"
+            [ngClass]="{
+              'cell': true,
+              'x': cell==='X',
+              'o': cell==='O',
+              'win': game.winningCells?.some(c => c[0] == i && c[1] == j)
+            }">
+            {{cell || ''}}
+          </button>
+        </div>
+      </div>
+
+      <div class="status">
+        <h3 *ngIf="game.status==='Won'">🏆 {{game.winner}} Wins!</h3>
+        <h3 *ngIf="game.status==='Draw'">🤝 Draw Game</h3>
+      </div>
+
+      <div class="actions">
+        <button mat-flat-button color="accent" (click)="undo()">Undo</button>
+        <button mat-button color="warn" (click)="resetGame()">Reset</button>
+        <button mat-button color="primary" (click)="backToMenu()">Main Menu</button>
+      </div>
+
+    </mat-card>
+
+    <!-- ✅ SIDE PANEL -->
+    <div class="side">
+
+      <mat-card>
+        <h3>📊 Scoreboard</h3>
+
+        <div class="scores">
+          <div>X: {{score?.xWins}}</div>
+          <div>O: {{score?.oWins}}</div>
+          <div>Draw: {{score?.draws}}</div>
+        </div>
+
+        <button mat-button (click)="resetScore()">Reset Score</button>
+      </mat-card>
+
+      <mat-card>
+        <h3>📜 Move History</h3>
+
+        <ul>
+          <li *ngFor="let m of game.moves">
+            #{{m.moveNumber}} {{m.player}} ({{m.row+1}},{{m.column+1}})
+          </li>
+        </ul>
+      </mat-card>
+
+    </div>
+
+  </div>
+</div>
